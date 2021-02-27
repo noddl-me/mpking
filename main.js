@@ -1,4 +1,5 @@
 const sys = uni.getSystemInfoSync();
+const logger = uni.getRealtimeLogManager();
 const getSDKVersion = (str) => {
   const arr = str.split(".");
   const s = arr.join("");
@@ -24,6 +25,7 @@ class Mpking {
   runtime = "wechat";
   isWeapp = typeof wx !== "undefined";
   sdkVersion = getSDKVersion(sys.SDKVersion);
+  logger = logger;
 
   timelineEnabled =
     this.isWeapp &&
@@ -33,9 +35,9 @@ class Mpking {
   init(options) {
     this.version = options.version || "1.0.0";
     if (process.env.NODE_ENV === "production") {
-      this.isDev = false
+      this.isDev = false;
     } else {
-      this.isDev = options.isDev
+      this.isDev = options.isDev;
     }
     this.application = options.application || "";
     this.baseUrl =
@@ -43,6 +45,15 @@ class Mpking {
       (this.isDev ? "http://localhost:9090" : "https://www.noddl.me/v3");
     this.ossUrl = options.ossUrl || "https://bbq.noddl.me";
   }
+
+  _showToast(title, duration = 4000) {
+    uni.showToast({
+      title,
+      icon: "none",
+      duration,
+    });
+  }
+
   getEncryptOSSFileUrl(filename, absolute = false, md5Fn = null) {
     if (!md5Fn) {
       return;
@@ -60,7 +71,7 @@ class Mpking {
   getOSSFileUrl = (filename, absolute = false) =>
     absolute ? filename : `${this.ossUrl}/${filename}`;
 
-  request = (options) => {
+  request = (options, times = 0) => {
     const url = options.absoluteUrl
       ? options.absoluteUrl
       : `${this.baseUrl}${options.url}`;
@@ -77,50 +88,63 @@ class Mpking {
     }
     return uni.request(params).then((r) => {
       const [err, res] = r;
-      if (err) return;
+      if (err) {
+        return Promise.reject(err);
+      }
       if (res.statusCode === 401) {
-        return this.fetchOpenid(true).then(() => this.request(options));
+        if (times >= 10) {
+          this._showToast("网络通讯不佳，请稍后重试");
+          return Promise.reject(401);
+        } else {
+          return this.fetchOpenid(true).then(() => {
+            return this.request(options, times + 1);
+          });
+        }
       }
       if (res.statusCode === 403) {
-        uni.hideLoading();
-        uni.showToast({
-          title: "无权限访问",
-          duration: 5000,
-          icon: "none",
-        });
-      } else {
-        return res;
+        this._showToast("无权限访问");
+        return Promise.reject(403);
       }
+      return res;
     });
   };
 
   fetchOpenid = (renew = false) => {
     const { openid } = this.globalData;
+
     if (openid && !renew) {
       return Promise.resolve(openid);
     }
-    return uni.login().then((r) => {
-      const [_, res] = r;
-      return this.request({
-        url: "/session/openid",
-        method: "POST",
-        withoutToken: true,
-        data: {
-          code: res.code,
-          application: this.application,
-          type: this.runtime,
-        },
-      })
-        .then((res1) => {
+    return uni
+      .login()
+      .then((r) => {
+        const [err, res] = r;
+        if (err) {
+          return Promise.reject(err);
+        }
+        return this.request({
+          url: "/session/openid",
+          method: "POST",
+          withoutToken: true,
+          data: {
+            code: res.code,
+            application: this.application,
+            type: this.runtime,
+          },
+        }).then((res1) => {
+          if (!res1 || !res1.data) {
+            return Promise.reject(new Error("从server获取openid失败"));
+          }
           const { openid, token } = res1.data;
           this.globalData.openid = openid;
           uni.setStorageSync("token", token);
           return openid;
-        })
-        .catch((err) => {
-          console.error(err);
         });
-    });
+      })
+      .catch((err) => {
+        logger.error(err);
+        this._showToast("登录失败，请重试");
+      });
   };
 
   getConfig = () => {
@@ -138,14 +162,13 @@ class Mpking {
       const config = res.data;
       this.globalData.config = config;
       const currentVersion = uni.getStorageSync("version");
-      const shouldShowUpdate = currentVersion !== config.version;
       uni.setStorageSync("version", config.version);
       if (config.version !== this.version) {
         this.globalData.verification = true;
       }
       return {
         ...res.data,
-        shouldShowUpdate,
+        updated: currentVersion !== config.version,
       };
     });
   };
