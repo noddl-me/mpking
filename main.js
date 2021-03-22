@@ -1,5 +1,4 @@
 const sys = uni.getSystemInfoSync();
-const logger = uni.getRealtimeLogManager();
 const getSDKVersion = (str) => {
   const arr = str.split(".");
   const s = arr.join("");
@@ -25,7 +24,6 @@ class Mpking {
   runtime = "wechat";
   isWeapp = typeof wx !== "undefined";
   sdkVersion = getSDKVersion(sys.SDKVersion);
-  logger = logger;
 
   timelineEnabled =
     this.isWeapp &&
@@ -39,6 +37,7 @@ class Mpking {
     } else {
       this.isDev = options.isDev;
     }
+    this.runtime = options.runtime || "wechat";
     this.application = options.application || "";
     this.baseUrl =
       options.baseUrl ||
@@ -135,6 +134,9 @@ class Mpking {
           if (!res1 || !res1.data) {
             return Promise.reject(new Error("从server获取openid失败"));
           }
+          if (res1.statusCode !== 200) {
+            return Promise.reject(new Error(res1.data.message));
+          }
           const { openid, token } = res1.data;
           this.globalData.openid = openid;
           uni.setStorageSync("token", token);
@@ -142,8 +144,8 @@ class Mpking {
         });
       })
       .catch((err) => {
-        logger.error(err);
         this._showToast("登录失败，请重试");
+        return Promise.reject(err);
       });
   };
 
@@ -151,10 +153,7 @@ class Mpking {
     if (this.globalData.config) {
       return Promise.resolve(this.globalData.config);
     }
-    const url =
-      this.runtime === "wechat"
-        ? `/announcement/announcements/${this.application}`
-        : `/announcement/announcements/${this.application}QQ`;
+    const url = `/announcement/announcements/${this.application}`;
     return this.request({
       url,
       method: "GET",
