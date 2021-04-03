@@ -12,6 +12,7 @@ class Mpking {
     openid: null,
     user: null,
     announcement: null,
+    cc: {},
   };
 
   version = "1.0.0";
@@ -157,19 +158,39 @@ class Mpking {
     return this.request({
       url,
       method: "GET",
-    }).then((res) => {
-      const config = res.data;
-      this.globalData.config = config;
-      const currentVersion = uni.getStorageSync("version");
-      uni.setStorageSync("version", config.version);
-      if (config.version !== this.version) {
-        this.globalData.verification = true;
-      }
-      return {
-        ...res.data,
-        updated: currentVersion !== config.version,
-      };
-    });
+    })
+      .then((res) => {
+        if (res.statusCode !== 200) {
+          throw Error("获取配置失败");
+        }
+        const config = res.data;
+        this.globalData.config = config;
+        this.cc = config.content;
+        const currentVersion = uni.getStorageSync("version");
+        uni.setStorageSync("version", config.version);
+        if (config.version !== this.version) {
+          this.globalData.verification = true;
+        }
+        return {
+          ...res.data,
+          updated: currentVersion !== config.version,
+        };
+      })
+      .catch((err) => {
+        return new Promise((resolve, reject) => {
+          uni.showModal({
+            title: "初始化失败，请求重试",
+            confirmText: "重试",
+            success: (res) => {
+              if (res.confirm) {
+                resolve(this.getConfig());
+              } else {
+                reject();
+              }
+            },
+          });
+        });
+      });
   };
 
   getQRCode = (openid) => {
