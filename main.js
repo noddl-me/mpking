@@ -40,9 +40,7 @@ class Mpking {
     }
     this.runtime = options.runtime || "wechat";
     this.application = options.application || "";
-    this.baseUrl =
-      options.baseUrl ||
-      (this.isDev ? "http://localhost:9090" : "https://www.noddl.me/v3");
+    this.baseUrl = options.baseUrl || "https://www.noddl.me/v3";
     this.ossUrl = options.ossUrl || "https://bbq.noddl.me";
   }
 
