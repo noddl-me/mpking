@@ -90,7 +90,7 @@ class Mpking {
         return Promise.reject(err);
       }
       if (res.statusCode === 401) {
-        if (times >= 10) {
+        if (times >= 5) {
           this._showToast("网络通讯不佳，请稍后重试");
           return Promise.reject(401);
         } else {
@@ -190,6 +190,44 @@ class Mpking {
         });
       });
   };
+
+  uploadFileToOSS(options) {
+    return new Promise((resolve, reject) => {
+      this.request({
+        url: "/session/oss/signature",
+        method: "POST",
+        data: {
+          application: this.application,
+        },
+      }).then((res) => {
+        if (res.statusCode !== 200) {
+          reject();
+        }
+        const { key, filePath, host } = options;
+        const { signature, oss_access_id, policy } = res.data;
+        uni.uploadFile({
+          url,
+          filePath,
+          name: "file",
+          formData: {
+            key,
+            policy,
+            OSSAccessKeyId: oss_access_id,
+            signature,
+          },
+          success: (res) => {
+            if (res.statusCode === 204) {
+              console.log("上传成功");
+              resolve(`${url}/${filePath}`);
+            }
+          },
+          fail: (err) => {
+            reject(err);
+          },
+        });
+      });
+    });
+  }
 
   getQRCode = (openid) => {
     const url = uni.getStorageSync("qrcode");
