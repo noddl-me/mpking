@@ -201,12 +201,13 @@ class Mpking {
         },
       }).then((res) => {
         if (res.statusCode !== 200) {
-          reject();
+          reject("获取signature失败");
+          return;
         }
-        const { key, filePath, host } = options;
+        const { key, filePath, uploadHost, resultHost } = options;
         const { signature, oss_access_id, policy } = res.data;
         uni.uploadFile({
-          url,
+          url: uploadHost,
           filePath,
           name: "file",
           formData: {
@@ -216,13 +217,13 @@ class Mpking {
             signature,
           },
           success: (res) => {
-            if (res.statusCode === 204) {
-              console.log("上传成功");
-              resolve(`${url}/${filePath}`);
+            if (res.statusCode === 204 || res.statusCode === 200) {
+              resolve(`${resultHost}/${key}`);
             }
           },
           fail: (err) => {
-            reject(err);
+            console.error(err)
+            reject("上传失败");
           },
         });
       });
