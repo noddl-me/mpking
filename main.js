@@ -81,12 +81,19 @@ class Mpking {
         "Accept-Language": "zh-hans",
       },
     };
-    if (!options.withoutToken && token) {
-      params.header.Authorization = `Bearer ${token}`;
+    if (!options.withoutToken) {
+      if (token) {
+        params.header.Authorization = `Bearer ${token}`;
+      } else {
+        return this.fetchOpenid(true).then(() => {
+          return this.request(options, times + 1);
+        });
+      }
     }
     return uni.request(params).then((r) => {
       const [err, res] = r;
       if (err) {
+        this._showToast("系统错误");
         return Promise.reject(err);
       }
       if (res.statusCode === 401) {
@@ -222,7 +229,7 @@ class Mpking {
             }
           },
           fail: (err) => {
-            console.error(err)
+            console.error(err);
             reject("上传失败");
           },
         });
